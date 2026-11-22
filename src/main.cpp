@@ -9,6 +9,7 @@
 #include <exec/any_sender_of.hpp>
 #include <exec/repeat_effect_until.hpp>
 #include <exec/static_thread_pool.hpp>
+#include <exec/variant_sender.hpp>
 #include <stdexec/execution.hpp>
 
 #include "mandelbrot_sender.hpp"
@@ -25,7 +26,7 @@ public:
     static constexpr float FRAME_TIME_MS = 1000.0f / TARGET_FPS;
 
     explicit WaitForFPS(FrameClock &frame_clock, unsigned int target_fps)
-        : frame_clock_(frame_clock), frame_time_(1s / target_fps) {}
+        : frame_clock_(frame_clock), frame_time_(std::chrono::milliseconds{1s} / target_fps) {}
 
     void operator()() {
         auto cur_frame_duration = frame_clock_.GetFrameTime();
@@ -38,7 +39,7 @@ public:
 
 private:
     FrameClock &frame_clock_;
-    const std::chrono::milliseconds frame_time_ = 1ms;
+    const std::chrono::milliseconds frame_time_;
 };
 
 class MandelbrotApp {
@@ -59,7 +60,24 @@ public:
                    }));
         ex::sync_wait(std::move(initialize));
 
-        auto process_frame = ex::just(); // Ваш код здесь
+        auto make_render = [this, compute_sched, sfml_sched] {
+            return ex::just(&state_->fb) | ex::continues_on(compute_sched) |
+                   mandelbrot::MakeComputeSender(state_->render_settings, state_->app_state.viewport) |
+                   ex::continues_on(sfml_sched) | render::MakeSfmlDisplaySender(*state_);
+        };
+        using skip_sender_t = decltype(ex::just());
+        using render_sender_t = decltype(make_render());
+
+        auto process_frame =
+            ex::starts_on(sfml_sched, SfmlEventHandler{state_->window, state_->render_settings, state_->app_state}) |
+            ex::let_value([this, make_render]() -> exec::variant_sender<skip_sender_t, render_sender_t> {
+                if (!state_->app_state.need_rerender) {
+                    return ex::just();
+                }
+                state_->app_state.need_rerender = false;
+                return make_render();
+            }) |
+            ex::then(WaitForFPS{state_->frame_clock, static_cast<unsigned int>(WaitForFPS::TARGET_FPS)});
 
         auto repeated_pipeline = std::move(process_frame) | ex::then([this] { return state_->app_state.should_exit; }) |
                                  exec::repeat_effect_until();
