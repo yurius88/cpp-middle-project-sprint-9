@@ -1,7 +1,7 @@
 #pragma once
 
 #include "types_sfml.hpp"
-
+#include <print>
 #include <stdexec/execution.hpp>
 
 namespace render {
