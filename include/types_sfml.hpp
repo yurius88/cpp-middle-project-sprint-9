@@ -41,6 +41,7 @@ struct SfmlState {
     FrameBuffer fb;
 
     FrameClock frame_clock;
+    FrameClock prepare_frame_clock;
 
     explicit SfmlState(const RenderSettings &s)
         : render_settings(s),

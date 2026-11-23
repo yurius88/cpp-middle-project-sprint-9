@@ -15,6 +15,7 @@
 #include "mandelbrot_sender.hpp"
 #include "sfml_display_sender.hpp"
 #include "sfml_events_handler.hpp"
+#include "types_core.hpp"
 #include "types_sfml.hpp"
 
 using namespace std::chrono_literals;
@@ -61,7 +62,10 @@ public:
         ex::sync_wait(std::move(initialize));
 
         auto make_render = [this, compute_sched, sfml_sched] {
-            return ex::just(&state_->fb) | ex::continues_on(compute_sched) |
+            return ex::just(&state_->fb) | ex::continues_on(compute_sched) | ex::then([this](auto *fb) {
+                       state_->prepare_frame_clock.Reset();
+                       return fb;
+                   }) |
                    mandelbrot::MakeComputeSender(state_->render_settings, state_->app_state.viewport) |
                    ex::continues_on(sfml_sched) | render::MakeSfmlDisplaySender(*state_);
         };
@@ -74,8 +78,15 @@ public:
                 if (!state_->app_state.need_rerender) {
                     return ex::just();
                 }
-                state_->app_state.need_rerender = false;
+                // state_->app_state.need_rerender = false;
                 return make_render();
+            }) |
+            ex::then([this]() {
+                if (state_->app_state.need_rerender) {
+                    std::println("PIPELINE time {}", std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                         state_->prepare_frame_clock.GetFrameTime()));
+                    state_->app_state.need_rerender = false;
+                }
             }) |
             ex::then(WaitForFPS{state_->frame_clock, static_cast<unsigned int>(WaitForFPS::TARGET_FPS)});
 
@@ -98,6 +109,10 @@ int main() {
     std::println("  Right Mouse Button - Zoom Out");
     std::println("  X                  - Toggle Auto Zoom (infinite zoom to 'Seahorse Valley' point)");
     std::println("  C                  - Reset to Initial View");
+    std::println("  Q                  - Decrease escape_radius");
+    std::println("  W                  - Increase escape_radius");
+    std::println("  E                  - Decrease max_iterations");
+    std::println("  R                  - Increase max_iterations");
     std::println("  Close Window       - Exit\n");
 
     try {
