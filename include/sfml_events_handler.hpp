@@ -22,13 +22,13 @@ public:
 
         Receiver receiver_;
         sf::RenderWindow &window_;
-        RenderSettings render_settings_;
+        RenderSettings &render_settings_;
         AppState &state_;
 
         static constexpr float ZOOM_INTERVAL_MS = 100.0f;
 
         template <typename R>
-        explicit OperationState(R &&r, sf::RenderWindow &window, RenderSettings render_settings, AppState &state)
+        explicit OperationState(R &&r, sf::RenderWindow &window, RenderSettings &render_settings, AppState &state)
             : receiver_{std::forward<R>(r)}, window_{window}, render_settings_{render_settings}, state_{state} {}
 
         OperationState(OperationState &&) = delete;
@@ -78,12 +78,41 @@ public:
         }
 
         void HandleKeyPress(const sf::Event::KeyEvent &key) {
+            static constexpr double delta_radius = 0.5;
+            static constexpr double delta_iterations = 1;
+
             if (key.code == sf::Keyboard::X) {
                 state_.auto_zoom_enabled = !state_.auto_zoom_enabled;
             } else if (key.code == sf::Keyboard::C) {
                 state_.auto_zoom_enabled = false;
                 state_.viewport = AppState::INITIAL_VIEWPORT;
                 state_.need_rerender = true;
+                state_.zoom_clock.restart();
+            } else if (key.code == sf::Keyboard::Q) {
+                state_.auto_zoom_enabled = false;
+                state_.viewport = AppState::INITIAL_VIEWPORT;
+                state_.need_rerender = true;
+                render_settings_.escape_radius -= delta_radius;
+                state_.zoom_clock.restart();
+
+            } else if (key.code == sf::Keyboard::W) {
+                state_.auto_zoom_enabled = false;
+                state_.viewport = AppState::INITIAL_VIEWPORT;
+                state_.need_rerender = true;
+                render_settings_.escape_radius += delta_radius;
+                state_.zoom_clock.restart();
+            } else if (key.code == sf::Keyboard::E) {
+                state_.auto_zoom_enabled = false;
+                state_.viewport = AppState::INITIAL_VIEWPORT;
+                state_.need_rerender = true;
+                render_settings_.max_iterations -= delta_iterations;
+                state_.zoom_clock.restart();
+
+            } else if (key.code == sf::Keyboard::R) {
+                state_.auto_zoom_enabled = false;
+                state_.viewport = AppState::INITIAL_VIEWPORT;
+                state_.need_rerender = true;
+                render_settings_.max_iterations += delta_iterations;
                 state_.zoom_clock.restart();
             }
         }
@@ -155,10 +184,10 @@ public:
     };
 
     sf::RenderWindow &window_;
-    RenderSettings render_settings_;
+    RenderSettings &render_settings_;
     AppState &state_;
 
-    SfmlEventHandler(sf::RenderWindow &window, RenderSettings render_settings, AppState &state)
+    SfmlEventHandler(sf::RenderWindow &window, RenderSettings &render_settings, AppState &state)
         : window_{window}, render_settings_{render_settings}, state_{state} {}
 
     template <stdexec::receiver_of<completion_signatures_t> Receiver>
